@@ -14,7 +14,7 @@ Download video or audio from bilibili
   ```bash
   $ python -m pip install requests
   ```
-* 若已有ffmpeg并以添加至环境变量，则无需下载带ffmpeg的版本
+* 若已有ffmpeg并已添加至环境变量，则无需下载带ffmpeg的版本
 
 ## 功能
 
@@ -24,3 +24,18 @@ Download video or audio from bilibili
 * 下载 合集/收藏夹/分p视频 的中全部视频
 * 下载动漫
 
+
+## sessdata的获取
+
+使用chrome浏览器打开b站，在登录状态下
+右键 -> 检查 -> application -> cookies -> sessdata
+复制下方cookie value中的内容
+
+![1](./screenshots/screenshot1.png)
+![2](./screenshots/screenshot2.png)
+![3](./screenshots/screenshot3.png)
+
+
+## 闲话
+这是一个做着玩的项目，功能跟其他下载器相差不大，如有不足请谅解
+通常来说只要把网址完整的复制粘贴进程序就可以正常运行，如果没成功那可能是程序写的太菜了，没处理好
