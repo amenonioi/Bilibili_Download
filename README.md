@@ -10,7 +10,10 @@ Download video or audio from bilibili
 
 ## 使用
 
-* 在releases页面下载，python版本需自行安装requests库
+* 在[releases](https://github.com/amenonioi/Bilibili_Download/releases)页面下载，python版本需自行安装requests库
+  ```bash
+  $ python -m pip install requests
+  ```
 * 若已有ffmpeg并以添加至环境变量，则无需下载带ffmpeg的版本
 
 ## 功能
