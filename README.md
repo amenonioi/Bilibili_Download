@@ -31,9 +31,9 @@ Download video or audio from bilibili
 右键 -> 检查 -> application -> cookies -> sessdata
 复制下方cookie value中的内容
 
-![1](./screenshots/screenshot1.png)
-![2](./screenshots/screenshot2.png)
-![3](./screenshots/screenshot3.png)
+![1](./screenshots/Screenshot1.png)
+![2](./screenshots/Screenshot2.png)
+![3](./screenshots/Screenshot3.png)
 
 
 ## 闲话
