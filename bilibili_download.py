@@ -2,6 +2,7 @@ import requests
 import json
 import subprocess
 import os
+import questionary
 
 with open('user_data.json', 'r', encoding='utf-8') as user_data:
     user_info = json.load(user_data)
@@ -12,7 +13,11 @@ headers = {
 cookies = {'SESSDATA': user_info['SESSDATA']}
 store_path = user_info['path']
 
-print('当前的下载路径为', store_path)
+PINK = "\033[38;5;213m"
+BLUE = "\033[1;34m"
+RESET = "\033[0m"
+print(f'{PINK}', end='')
+print('当前的下载路径为:', store_path)
 url = 'https://api.bilibili.com/x/web-interface/nav'
 request = requests.get(url, headers=headers, cookies=cookies)
 info = request.json()
@@ -21,35 +26,39 @@ if info['code'] == -101:
     print('游客状态')
 else:
     vip = info['data']['vipType']
-    if vip == 0:
+    if info['data']['vipStatus'] == 0:
         print('普通用户')
     elif vip == 1:
         print('大会员')
     elif vip == 2:
         print('年度大会员')
+print(f'{RESET}')
 
-print('-输入 help 以获得帮助-')
 while True:
-    instruction = input('<bilibili_download>')
-    if instruction == 'exit':
+    instruction = questionary.select(
+        "请选择指令 (箭头切换，ENTER确认):",
+        choices=["进行下载", "改变保存位置", "登录b站账号（使用sessdata，获取方法详见https://github.com/amenonioi/Bilibili_Download）", "退出程序"],
+        default="进行下载"
+    ).ask()
+    if instruction == '退出程序':
+        print(f'{BLUE}已退出程序\n{RESET}')
         break
-    elif instruction == 'help':
-        print(' download -- 进行下载')
-        print(' filepath -- 改变保存位置')
-        print(' login -- 登录b站账号（使用sessdata）')
-        print(' exit -- 退出程序')
-    elif instruction == 'download':
+    elif instruction == '进行下载':
         subprocess.run('python core.py')
-    elif instruction == 'filepath':
-        filepath = input('请输入文件夹路径')
+    elif instruction == '改变保存位置':
+        filepath = questionary.text("请输入文件夹路径:").ask()
+        print(f'{PINK}', end='')
         if os.path.exists(filepath):
             store_path = filepath
             user_info['path'] = store_path
             with open('user_data.json', 'w', encoding='utf-8') as user_data:
                 user_data.write(json.dumps(user_info))
-        print('下载路径已修改至', filepath)
-    elif instruction == 'login':
-        sessdata = input('请输入sessdata')
+            print('下载路径已修改至:', filepath)
+        else:
+            print('无效的路径')
+        print(f'\n{RESET}', end='')
+    elif instruction == '登录b站账号（使用sessdata）':
+        sessdata = questionary.text("请输入sessdata:").ask()
         cookies = {'SESSDATA': sessdata}
         user_info['SESSDATA'] = sessdata
         with open('user_data.json', 'w', encoding='utf-8') as user_data:
@@ -58,7 +67,9 @@ while True:
         url = 'https://api.bilibili.com/x/web-interface/nav'
         request = requests.get(url, headers=headers, cookies=cookies)
         info = request.json()
-        print('用户状态：', end='')
+
+        print(f'{PINK}', end='')
+        print('用户状态已变更为：', end='')
         if info['code'] == -101:
             print('游客状态')
         else:
@@ -69,4 +80,5 @@ while True:
                 print('大会员')
             elif vip == 2:
                 print('年度大会员')
+        print(f'\n{RESET}', end='')
 
