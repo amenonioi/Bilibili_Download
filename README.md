@@ -10,9 +10,12 @@ Download video or audio from bilibili
 
 ## 使用
 
-* 在[releases](https://github.com/amenonioi/Bilibili_Download/releases)页面下载，python版本需自行安装requests库
+* 在[releases](https://github.com/amenonioi/Bilibili_Download/releases)页面下载，python版本需自行安装requests库和questionary库
   ```bash
   $ python -m pip install requests
+  ```
+  ```bash
+  $ python -m pip install questionary
   ```
 * 若已有ffmpeg并已添加至环境变量，则无需下载带ffmpeg的版本
 
@@ -21,7 +24,7 @@ Download video or audio from bilibili
 * 下载视频
 * 下载音频
 * 下载封面
-* 下载 合集/收藏夹/分p视频 的中全部视频
+* 下载 合集/收藏夹/分p视频 中的视频（可选择全部下载或部分下载，下载合集或收藏夹时会默认下载分p视频中的所有分p）
 * 下载动漫
 
 
