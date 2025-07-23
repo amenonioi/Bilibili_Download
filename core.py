@@ -2,6 +2,44 @@ import requests
 import json
 import subprocess
 import os
+import questionary
+
+
+def ask_choice(the_type):
+    video = questionary.select(
+        "是否下载视频 (箭头切换，ENTER确认):",
+        choices=["是", "否"],
+        default=video_default
+    ).ask()
+    default_info['video_default'] = video
+    if video == "是":
+        video = True
+    else:
+        video = False
+    audio = questionary.select(
+        "是否下载音频 (箭头切换，ENTER确认):",
+        choices=["是", "否"],
+        default=audio_default
+    ).ask()
+    default_info['audio_default'] = audio
+    if audio == "是":
+        audio = True
+    else:
+        audio = False
+    if the_type != "anime":
+        cover_download = questionary.select(
+            "是否下载封面 (箭头切换，ENTER确认):",
+            choices=["是", "否"],
+            default=cover_default
+        ).ask()
+        default_info['cover_default'] = cover_download
+        if cover_download == "是":
+            cover_download = True
+        else:
+            cover_download = False
+    else:
+        cover_download = False
+    return video, audio, cover_download
 
 
 def get_id(url_input, id_type):
@@ -66,6 +104,7 @@ def get_fav_info(media_id):
     media_count = info['data']['media_count']
 
     bvs = []
+    titles = []
     for i in range(1, media_count // 20 + 2):
         data = {
             'media_id': media_id,
@@ -78,22 +117,65 @@ def get_fav_info(media_id):
         content = info['data']['medias']
         for j in range(len(content)):
             bvs.append(content[j]['bv_id'])
-    return bvs
+            # keywords 是会在创建文件夹或合并视频时产生bug的字符
+            keywords = ['\\', '/', ':', '*', '?', '"', '<', '>', '|']
+            title = content[j]['title']
+            for k in range(len(keywords)):
+                title = title.replace(keywords[k], '')
+            titles.append(title)
+    return bvs, titles
 
 
-def get_collection_info(season_id):
-    url = 'https://api.bilibili.com/x/space/fav/season/list?'
-    data = {
-        'season_id': season_id
-    }
-    request = requests.get(url=url, params=data, headers=headers, cookies=cookies)
-    info = request.json()
-    medias = info['data']['medias']
+def get_collection_info(season_id, the_type):
+    if the_type == 'series':
+        url = 'https://api.bilibili.com/x/series/series?'
+        data = {
+            'series_id': season_id
+        }
+        request = requests.get(url=url, params=data, headers=headers, cookies=cookies)
+        info = request.json()
+        mid = info['data']['meta']['mid']
 
-    bvs = []
-    for i in range(len(medias)):
-        bvs.append(medias[i]['bvid'])
-    return bvs
+        url = 'https://api.bilibili.com/x/series/archives?'
+        data = {
+            'series_id': season_id,
+            'mid': mid
+        }
+        request = requests.get(url=url, params=data, headers=headers, cookies=cookies)
+        info = request.json()
+        archives = info['data']['archives']
+
+        bvs = []
+        titles = []
+        for i in range(len(archives)):
+            bvs.append(archives[i]['bvid'])
+            # keywords 是会在创建文件夹或合并视频时产生bug的字符
+            keywords = ['\\', '/', ':', '*', '?', '"', '<', '>', '|']
+            title = archives[i]['title']
+            for k in range(len(keywords)):
+                title = title.replace(keywords[k], '')
+            titles.append(title)
+
+    else:
+        url = 'https://api.bilibili.com/x/space/fav/season/list?'
+        data = {
+            'season_id': season_id
+        }
+        request = requests.get(url=url, params=data, headers=headers, cookies=cookies)
+        info = request.json()
+        medias = info['data']['medias']
+
+        bvs = []
+        titles = []
+        for i in range(len(medias)):
+            bvs.append(medias[i]['bvid'])
+            keywords = ['\\', '/', ':', '*', '?', '"', '<', '>', '|']
+            title = medias[i]['title']
+            for k in range(len(keywords)):
+                title = title.replace(keywords[k], '')
+            titles.append(title)
+
+    return bvs, titles
 
 
 def get_video_stream_info(data):
@@ -190,7 +272,7 @@ def get_video_stream(title, cover, video_url, audio_url, page, subtitle):
         os.mkdir(title)
     os.chdir('./' + title)
 
-    if cover_download:
+    if cover_download and (not page or page == 1):
         request = requests.get(cover, headers=headers)
         content = request.content
         with open('./' + title + '.jpg', 'wb') as filename:
@@ -232,9 +314,24 @@ def download_in_chunk(url, chunk_size, path, title, download_type):
         downloaded_size = 0
         while True:
             end = downloaded_size + chunk_size
-            this_header = headers
+            # 必须使用浅拷贝，否则会修改headers
+            this_header = headers.copy()
             this_header['Range'] = f'bytes={downloaded_size}-{end}'
-            response = requests.get(url, headers=this_header, stream=True)
+
+            success = False
+            while not success:
+                try:
+                    response = requests.get(url, headers=this_header, stream=True)
+                    response.content
+                except requests.exceptions.ChunkedEncodingError:
+                    print(f"{RED}下载中断，请确认网络环境后重试{RESET}")
+                    confirmed = questionary.select(
+                        "继续下载 (ENTER确认):",
+                        choices=["继续下载"]
+                    ).ask()
+                else:
+                    success = True
+
             if not response:
                 break
             file.write(response.content)
@@ -263,23 +360,41 @@ def video_download(url_input, id_type):
     for i in range(len(datas)):
         data = datas[i]
         subtitle = subtitles[i]
+        if len(datas) != 1:
+            if i == 0:
+                download_choice = questionary.select(
+                    "这是一个分p视频，请选择下载内容 (箭头切换，ENTER确认)",
+                    choices=["下载全部分p", "下载部分分p"],
+                    default="下载全部分p"
+                ).ask()
+                if download_choice == "下载全部分p":
+                    download_choice = subtitles
+                else:
+                    download_choice = questionary.checkbox(
+                        "请选择要下载的分p (箭头切换，空格选中，ENTER确认)",
+                        choices=subtitles
+                    ).ask()
+            if subtitle not in download_choice:
+                continue
+
         accept_quality, video_resolutions, audio_url = get_video_stream_info(data)
 
         if video:
-            video_quality = None
             if len(datas) == 1:
-                print(accept_quality)
-                while video_quality not in accept_quality:
-                    video_quality = input('请选择视频分辨率')
+                video_quality = questionary.select(
+                    "请选择视频分辨率 (箭头切换，ENTER确认):",
+                    choices=accept_quality
+                ).ask()
             elif i == 0:
                 quality_accept = []
                 for key in video_resolutions_encode.keys():
                     if video_resolutions_encode[key] in vip_accept:
                         quality_accept.append(key)
                 quality_accept.reverse()
-                print(quality_accept)
-                while video_quality not in video_resolutions_encode:
-                    video_quality = input('这是一个分p视频，请选择视频默认分辨率')
+                video_quality = questionary.select(
+                    "请选择视频默认分辨率 (箭头切换，ENTER确认):",
+                    choices=accept_quality
+                ).ask()
 
             if video_quality in accept_quality:
                 video_url = video_resolutions[video_resolutions_encode[video_quality]]
@@ -298,29 +413,53 @@ def video_download(url_input, id_type):
 def fav_download(url_input, id_type, mode):
     if mode == 'fav':
         media_id = get_id(url_input, id_type)
-        bvs = get_fav_info(media_id)
+        bvs, titles = get_fav_info(media_id)
     elif mode == 'collection':
         season_id = get_id(url_input, id_type)
-        bvs = get_collection_info(season_id)
+        if 'type=series' in input_url:
+            bvs, titles = get_collection_info(season_id, 'series')
+        else:
+            bvs, titles = get_collection_info(season_id, 'season')
 
-    video_quality = None
+    print(f'{PINK}', end='')
+    if mode == 'fav':
+        print('这是一个收藏夹')
+    elif mode == 'collection':
+        print('这是一个合集')
+    print(f'{RESET}', end='')
+
+    download_choice = questionary.select(
+        "请选择下载内容 (箭头切换，ENTER确认)",
+        choices=["下载全部视频", "下载部分视频"],
+        default="下载全部视频"
+    ).ask()
+    if download_choice == "下载全部视频":
+        download_choice = titles
+    else:
+        download_choice = questionary.checkbox(
+            "请选择要下载的视频 (箭头切换，空格选中，ENTER确认)",
+            choices=titles
+        ).ask()
+
     if video:
         quality_accept = []
         for key in video_resolutions_encode.keys():
             if video_resolutions_encode[key] in vip_accept:
                 quality_accept.append(key)
         quality_accept.reverse()
-        print(quality_accept)
-        if mode == 'fav':
-            print('这是一个收藏夹,', end='')
-        elif mode == 'collection':
-            print('这是一个合集,', end='')
-        while video_quality not in video_resolutions_encode:
-            video_quality = input('请选择视频默认分辨率')
+
+        video_quality = questionary.select(
+            "请选择视频默认分辨率 (箭头切换，ENTER确认):",
+            choices=quality_accept
+        ).ask()
 
     for i in range(len(bvs)):
         bv = bvs[i]
         datas, title, cover, subtitles = get_bv_info(bv)
+
+        if title not in download_choice:
+            continue
+
         if os.path.exists(title):
             x = 1
             while os.path.exists(title + str(x)):
@@ -344,48 +483,55 @@ def fav_download(url_input, id_type, mode):
                 get_video_stream(title, cover, video_url, audio_url, j + 1, 'P' + str(j + 1) + ' ' + subtitle)
 
 
-def bangumi_download(url_input, id_type, mode):
+def bangumi_download(url_input, id_type):
     the_id = get_id(url_input, id_type)
     ep_ids, cover, title, subtitles, accept_quality = get_bangumi_info(id_type, the_id)
 
-    if mode == '单集':
-        print('请选择要下载的单集（阿拉伯数字）', end='')
-        correct_input = False
-        while not correct_input:
-            index = input('请选择要下载的单集（阿拉伯数字）')
-            if index.isnumeric() and int(index) - 1 < len(ep_ids):
-                index = int(index) - 1
-                correct_input = True
-            else:
-                print('请输入正确的集数')
+    download_choice = questionary.select(
+        "这是一部动漫，请选择下载内容 (箭头切换，ENTER确认)",
+        choices=["下载全部单集", "下载部分单集"],
+        default="下载全部单集"
+    ).ask()
+    if download_choice == "下载全部单集":
+        download_choice = subtitles
+    else:
+        download_choice = questionary.checkbox(
+            "请选择要下载的单集 (箭头切换，空格选中，ENTER确认)",
+            choices=subtitles
+        ).ask()
 
     if os.path.exists(title):
         x = 1
         while os.path.exists(title + str(x)):
             x += 1
         title = title + str(x)
-    video_quality = None
-    print(accept_quality)
-    while video_quality not in accept_quality:
-        video_quality = input('选择视频分辨率')
+    video_quality = questionary.select(
+        "请选择视频分辨率 (箭头切换，ENTER确认):",
+        choices=accept_quality
+    ).ask()
     video_resolution = video_resolutions_encode[video_quality]
 
-    if mode == '单集':
-        bangumi_video_url, bangumi_audio_url = get_bangumi_stream_info(ep_ids[index], video_resolution)
-        get_video_stream(title, cover, bangumi_video_url, bangumi_audio_url, 1, subtitles[index])
-    else:
-        for i in range(len(ep_ids)):
-            bangumi_video_url, bangumi_audio_url = get_bangumi_stream_info(ep_ids[i], video_resolution)
-            get_video_stream(title, cover, bangumi_video_url, bangumi_audio_url, i+1, subtitles[i])
+    for i in range(len(ep_ids)):
+        if subtitles[i] not in download_choice:
+            continue
+        bangumi_video_url, bangumi_audio_url = get_bangumi_stream_info(ep_ids[i], video_resolution)
+        get_video_stream(title, cover, bangumi_video_url, bangumi_audio_url, i+1, subtitles[i])
 
 
 if __name__ == "__main__":
+    RED = "\033[1;31m"
+    PINK = "\033[38;5;213m"
+    RESET = "\033[0m"
+
     with open('default_data.json', 'r', encoding='utf-8') as default_data:
         default_info = json.load(default_data)
     video_resolutions_encode = default_info['video_resolutions_encode']
     video_resolutions_decode = default_info['video_resolutions_decode']
     audio_resolutions_sort = default_info['audio_resolutions_sort']
     vip = default_info['vip']
+    video_default = default_info['video_default']
+    audio_default = default_info['audio_default']
+    cover_default = default_info['cover_default']
 
     with open('user_data.json', 'r', encoding='utf-8') as user_data:
         user_info = json.load(user_data)
@@ -396,29 +542,7 @@ if __name__ == "__main__":
     cookies = {'SESSDATA': user_info['SESSDATA']}
     store_path = user_info['path']
 
-    input_url = input('请输入网址')
-
-    video = None
-    while video != 'yes' and video != 'no':
-        video = input('下载视频(yes/no)')
-    if video == 'yes':
-        video = True
-    else:
-        video = False
-    audio = None
-    while audio != 'yes' and audio != 'no':
-        audio = input('下载音频(yes/no)')
-    if audio == 'yes':
-        audio = True
-    else:
-        audio = False
-    cover_download = None
-    while cover_download != 'yes' and cover_download != 'no':
-        cover_download = input('下载封面(yes/no)')
-    if cover_download == 'yes':
-        cover_download = True
-    else:
-        cover_download = False
+    input_url = questionary.text("请输入网址:").ask()
 
     the_url = 'https://api.bilibili.com/x/web-interface/nav'
     the_request = requests.get(the_url, headers=headers, cookies=cookies)
@@ -427,7 +551,7 @@ if __name__ == "__main__":
         vip_accept = vip['-1']
     else:
         vipType = the_info['data']['vipType']
-        if vipType == 0:
+        if the_info['data']['vipStatus'] == 0:
             vip_accept = vip['0']
         elif vipType == 1:
             vip_accept = vip['1']
@@ -435,35 +559,45 @@ if __name__ == "__main__":
             vip_accept = vip['2']
     os.chdir(store_path)
 
+    success = True
     # 下载视频
     if 'BV' in input_url:
+        video, audio, cover_download = ask_choice('video')
         video_download(input_url, 'BV')
     # 下载收藏夹
     elif 'ftype=create' in input_url:
+        video, audio, cover_download = ask_choice('collect')
         fav_download(input_url, 'fid=', 'fav')
     # 下载合集
     elif 'type=season' in input_url or 'ftype=collect' in input_url:
+        video, audio, cover_download = ask_choice('collect')
         if 'fid' in input_url:
             fav_download(input_url, 'fid=', 'collection')
         elif 'lists/' in input_url:
             fav_download(input_url, 'lists/', 'collection')
     elif 'sid' in input_url:
+        video, audio, cover_download = ask_choice('collect')
         fav_download(input_url, 'sid=', 'collection')
+    elif 'type=series' in input_url:
+        video, audio, cover_download = ask_choice('collect')
+        fav_download(input_url, 'lists/', 'collection')
     # 下载动漫
     elif 'ss' in input_url:
-        cover_download = False
-        print('这是一部动漫，请选择下载内容')
-        mode = input('下载（全部/单集）')
-        while mode != '全部' and mode != '单集':
-            mode = input('下载（全部/单集）')
-        bangumi_download(input_url, 'ss', mode)
+        video, audio, cover_download = ask_choice('anime')
+        bangumi_download(input_url, 'ss')
     elif 'ep' in input_url:
-        cover_download = False
-        print('这是一部动漫，请选择下载内容')
-        mode = input('下载（全部/单集）')
-        while mode != '全部' and mode != '单集':
-            mode = input('下载（全部/单集）')
-        bangumi_download(input_url, 'ep', mode)
+        video, audio, cover_download = ask_choice('anime')
+        bangumi_download(input_url, 'ep')
 
     else:
-        print('无效的视频链接')
+        print(f'{RED}无效的视频链接{RESET}')
+        success = False
+
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    with open(current_dir + '\\' + 'default_data.json', 'w', encoding='utf-8') as default_data:
+        default_data.write(json.dumps(default_info))
+
+    if success:
+        print(f'{PINK}下载已完成{RESET}')
+
+    print()
