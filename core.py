@@ -9,9 +9,9 @@ def ask_choice(the_type):
     video = questionary.select(
         "是否下载视频 (箭头切换，ENTER确认):",
         choices=["是", "否"],
-        default=video_default
+        default=user_info['video_default']
     ).ask()
-    default_info['video_default'] = video
+    user_info['video_default'] = video
     if video == "是":
         video = True
     else:
@@ -19,9 +19,9 @@ def ask_choice(the_type):
     audio = questionary.select(
         "是否下载音频 (箭头切换，ENTER确认):",
         choices=["是", "否"],
-        default=audio_default
+        default=user_info['audio_default']
     ).ask()
-    default_info['audio_default'] = audio
+    user_info['audio_default'] = audio
     if audio == "是":
         audio = True
     else:
@@ -30,9 +30,9 @@ def ask_choice(the_type):
         cover_download = questionary.select(
             "是否下载封面 (箭头切换，ENTER确认):",
             choices=["是", "否"],
-            default=cover_default
+            default=user_info['cover_default']
         ).ask()
-        default_info['cover_default'] = cover_download
+        user_info['cover_default'] = cover_download
         if cover_download == "是":
             cover_download = True
         else:
@@ -267,22 +267,56 @@ def get_bangumi_stream_info(ep_id, video_resolution):
     return bangumi_video_url, bangumi_audio_url
 
 
+def check_title(title, title_type):
+    if user_info['download_duplicate_file']:
+        if os.path.exists(title):
+            x = 1
+            while os.path.exists(title + str(x) + title_type):
+                x += 1
+            title = title + str(x)
+    else:
+        if os.path.exists(title + title_type):
+            return False
+
+    return title + title_type
+
+
 def get_video_stream(title, cover, video_url, audio_url, page, subtitle):
-    if not page or page == 1:
-        os.mkdir(title)
-    os.chdir('./' + title)
+    folder_title = title
+    if (not page or page == 1) and user_info['save_in_file']:
+        folder_title = check_title(title, '')
+        if folder_title:
+            os.mkdir(folder_title)
+        else:
+            print(f'{RED}名为{title} 的文件已存在，已取消下载{RESET}')
+            return folder_title
+    if user_info['save_in_file']:
+        os.chdir('./' + folder_title)
 
     if cover_download and (not page or page == 1):
-        request = requests.get(cover, headers=headers)
-        content = request.content
-        with open('./' + title + '.jpg', 'wb') as filename:
-            filename.write(content)
+        cover_title = check_title(title, '.jpg')
+        if cover_title:
+            request = requests.get(cover, headers=headers)
+            content = request.content
+            with open('./' + cover_title, 'wb') as filename:
+                filename.write(content)
+        else:
+            print(f'{RED}名为{title} 的封面文件已存在，已取消下载{RESET}')
 
     title_info = title
     if page:
-        # os.mkdir(subtitle)
-        # os.chdir('./' + subtitle)
         title_info = subtitle
+
+    if video:
+        video_title = check_title(title_info, '.mp4')
+        if not video_title:
+            print(f'{RED}名为{title_info} 的视频文件已存在，已取消下载{RESET}')
+            return folder_title
+    elif audio:
+        audio_title = check_title(title_info, '.mp3')
+        if not audio_title:
+            print(f'{RED}名为{title_info} 的音频文件已存在，已取消下载{RESET}')
+            return folder_title
 
     if video:
         path = './video.mp4'
@@ -295,17 +329,16 @@ def get_video_stream(title, cover, video_url, audio_url, page, subtitle):
         subprocess.run('ffmpeg -loglevel quiet -i video.mp4 -i audio.mp3 -c:v copy -c:a copy -f mp4 converge_video.mp4')
         os.remove("video.mp4")
         os.remove("audio.mp3")
-        os.rename("converge_video.mp4", title_info + '.mp4')
+        os.rename("converge_video.mp4", video_title)
     elif video:
-        os.rename("video.mp4", title_info + '.mp4')
+        os.rename("video.mp4", video_title)
     elif audio:
-        os.rename("audio.mp3", title_info + '.mp3')
+        os.rename("audio.mp3", audio_title)
 
-    if page:
-        pass
-        # os.chdir('..')
+    if user_info['save_in_file']:
+        os.chdir('..')
 
-    os.chdir('..')
+    return folder_title
 
 
 def download_in_chunk(url, chunk_size, path, title, download_type):
@@ -352,12 +385,11 @@ def download_in_chunk(url, chunk_size, path, title, download_type):
 def video_download(url_input, id_type):
     bv = 'BV' + get_id(url_input, id_type)
     datas, title, cover, subtitles = get_bv_info(bv)
-    if os.path.exists(title):
-        x = 1
-        while os.path.exists(title + str(x)):
-            x += 1
-        title = title + str(x)
+
     for i in range(len(datas)):
+        if not title:
+            break
+
         data = datas[i]
         subtitle = subtitles[i]
         if len(datas) != 1:
@@ -407,7 +439,7 @@ def video_download(url_input, id_type):
         if len(datas) == 1:
             get_video_stream(title, cover, video_url, audio_url, None, None)
         else:
-            get_video_stream(title, cover, video_url, audio_url, i+1, 'P' + str(i+1) + ' ' + subtitle)
+            title = get_video_stream(title, cover, video_url, audio_url, i+1, 'P' + str(i+1) + ' ' + subtitle)
 
 
 def fav_download(url_input, id_type, mode):
@@ -460,12 +492,9 @@ def fav_download(url_input, id_type, mode):
         if title not in download_choice:
             continue
 
-        if os.path.exists(title):
-            x = 1
-            while os.path.exists(title + str(x)):
-                x += 1
-            title = title + str(x)
         for j in range(len(datas)):
+            if not title:
+                break
             data = datas[j]
             subtitle = subtitles[j]
             accept_quality, video_resolutions, audio_url = get_video_stream_info(data)
@@ -480,7 +509,7 @@ def fav_download(url_input, id_type, mode):
             if len(datas) == 1:
                 get_video_stream(title, cover, video_url, audio_url, None, None)
             else:
-                get_video_stream(title, cover, video_url, audio_url, j + 1, 'P' + str(j + 1) + ' ' + subtitle)
+                title = get_video_stream(title, cover, video_url, audio_url, j + 1, 'P' + str(j + 1) + ' ' + subtitle)
 
 
 def bangumi_download(url_input, id_type):
@@ -500,11 +529,6 @@ def bangumi_download(url_input, id_type):
             choices=subtitles
         ).ask()
 
-    if os.path.exists(title):
-        x = 1
-        while os.path.exists(title + str(x)):
-            x += 1
-        title = title + str(x)
     video_quality = questionary.select(
         "请选择视频分辨率 (箭头切换，ENTER确认):",
         choices=accept_quality
@@ -512,10 +536,12 @@ def bangumi_download(url_input, id_type):
     video_resolution = video_resolutions_encode[video_quality]
 
     for i in range(len(ep_ids)):
+        if not title:
+            break
         if subtitles[i] not in download_choice:
             continue
         bangumi_video_url, bangumi_audio_url = get_bangumi_stream_info(ep_ids[i], video_resolution)
-        get_video_stream(title, cover, bangumi_video_url, bangumi_audio_url, i+1, subtitles[i])
+        title = get_video_stream(title, cover, bangumi_video_url, bangumi_audio_url, i+1, subtitles[i])
 
 
 if __name__ == "__main__":
@@ -529,9 +555,6 @@ if __name__ == "__main__":
     video_resolutions_decode = default_info['video_resolutions_decode']
     audio_resolutions_sort = default_info['audio_resolutions_sort']
     vip = default_info['vip']
-    video_default = default_info['video_default']
-    audio_default = default_info['audio_default']
-    cover_default = default_info['cover_default']
 
     with open('user_data.json', 'r', encoding='utf-8') as user_data:
         user_info = json.load(user_data)
@@ -541,6 +564,15 @@ if __name__ == "__main__":
     }
     cookies = {'SESSDATA': user_info['SESSDATA']}
     store_path = user_info['path']
+
+    os.chdir(store_path)
+    if not user_info['save_in_file']:
+        if os.path.exists("video.mp4"):
+            os.remove("video.mp4")
+        if os.path.exists("audio.mp3"):
+            os.remove("audio.mp3")
+        if os.path.exists("converge_video.mp4"):
+            os.remove("converge_video.mp4")
 
     input_url = questionary.text("请输入网址:").ask()
 
@@ -557,7 +589,6 @@ if __name__ == "__main__":
             vip_accept = vip['1']
         elif vipType == 2:
             vip_accept = vip['2']
-    os.chdir(store_path)
 
     success = True
     # 下载视频
@@ -594,8 +625,8 @@ if __name__ == "__main__":
         success = False
 
     current_dir = os.path.dirname(os.path.abspath(__file__))
-    with open(current_dir + '\\' + 'default_data.json', 'w', encoding='utf-8') as default_data:
-        default_data.write(json.dumps(default_info))
+    with open(current_dir + '\\' + 'user_data.json', 'w', encoding='utf-8') as user_data:
+        user_data.write(json.dumps(user_info))
 
     if success:
         print(f'{PINK}下载已完成{RESET}')
