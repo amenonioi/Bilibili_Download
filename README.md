@@ -36,17 +36,13 @@ Download video or audio from bilibili
 * 是否将所有视频相关文件存储于文件夹中
 
 
-## sessdata的获取
+## cookie的获取
 
 使用chrome浏览器打开b站，在登录状态下
-右键 -> 检查 -> application -> cookies -> sessdata
-复制下方cookie value中的内容
+右键 -> 检查 -> network -> 合适的请求 -> request headers -> Cookie
+复制cookie所对应的内容
 
 ![1](./screenshots/Screenshot1.png)
 ![2](./screenshots/Screenshot2.png)
 ![3](./screenshots/Screenshot3.png)
 
-
-## 闲话
-这是一个做着学习用的项目，功能跟其他下载器相差不大，如有不足请谅解
-通常来说只要把网址完整的复制粘贴进程序就可以正常运行，如果没成功那可能是程序写的太菜了，没处理好
