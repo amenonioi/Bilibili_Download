@@ -3,6 +3,7 @@ import json
 import subprocess
 import os
 import questionary
+import sys
 
 
 def ask_choice(the_type):
@@ -534,10 +535,12 @@ def fav_download(url_input, id_type, mode):
 
     for i in range(len(bvs)):
         bv = bvs[i]
-        datas, title, cover, subtitles = get_bv_info(bv)
+        title = titles[i]
 
         if title not in download_choice:
             continue
+
+        datas, title, cover, subtitles = get_bv_info(bv)
 
         for j in range(len(datas)):
             if not title:
@@ -649,10 +652,21 @@ def up_download(url_input, id_type):
                 title = get_video_stream(title, cover, video_url, audio_url, j + 1, 'P' + str(j + 1) + ' ' + subtitle)
 
 
+def get_exe_dir():
+    """返回exe文件所在的目录（兼容开发环境和打包后）"""
+    if getattr(sys, 'frozen', False):
+        # 打包成exe后，sys.executable就是exe的完整路径
+        return os.path.dirname(sys.executable)
+    else:
+        # 开发环境下，使用当前脚本所在目录
+        return os.path.dirname(os.path.abspath(__file__))
+
+
 if __name__ == "__main__":
     RED = "\033[1;31m"
     PINK = "\033[38;5;213m"
     RESET = "\033[0m"
+    APP_HOME = get_exe_dir()
 
     with open('default_data.json', 'r', encoding='utf-8') as default_data:
         default_info = json.load(default_data)
@@ -665,7 +679,8 @@ if __name__ == "__main__":
         user_info = json.load(user_data)
     headers = {
         'referer': 'https://www.bilibili.com',
-        'user-agent': user_info['User-Agent']
+        'user-agent': user_info['User-Agent'],
+        'cookie': user_info['cookie']
     }
     cookies = {'SESSDATA': user_info['SESSDATA']}
     store_path = user_info['path']
@@ -733,8 +748,7 @@ if __name__ == "__main__":
         print(f'{RED}无效的视频链接{RESET}')
         success = False
 
-    current_dir = os.path.dirname(os.path.abspath(__file__))
-    with open(current_dir + '\\' + 'user_data.json', 'w', encoding='utf-8') as user_data:
+    with open(APP_HOME + '\\' + 'user_data.json', 'w', encoding='utf-8') as user_data:
         user_data.write(json.dumps(user_info))
 
     if success:
