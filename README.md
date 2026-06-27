@@ -38,9 +38,9 @@ Download video or audio from bilibili
 
 ## cookie的获取
 
-使用chrome浏览器打开b站，在登录状态下
-右键 -> 检查 -> network -> 合适的请求 -> request headers -> Cookie
-复制cookie所对应的内容
+·用chrome浏览器打开b站，在登录状态下
+·右键 -> 检查 -> network -> 合适的请求 -> request headers -> Cookie
+·复制cookie所对应的内容
 
 ![1](./screenshots/Screenshot1.png)
 ![2](./screenshots/Screenshot2.png)
